@@ -1,2 +1,9 @@
+
+<!-- README.md is generated from README.Rmd. Please edit that file -->
+
 # UNT-food-webs
-General repository to aggregate food web projects--past and present--at UNT
+
+<!-- badges: start -->
+<!-- badges: end -->
+
+The goal of UNT-food-webs is to …
