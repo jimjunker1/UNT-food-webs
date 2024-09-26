@@ -6,7 +6,7 @@ library(tidyverse)
 # library(DBI)
 source("./R/update-data-products.R")
 neonstore::neon_dir();neonstore::neon_db_dir()
-update_data_products("resources")
+# update_data_products("resources")
 # download NEON stream data not in update_data products
 dps = c("DP1.20063.001",
         "DP1.20066.001",
@@ -44,3 +44,63 @@ sed_fieldStation = readRDS(here::here("data/NEONdata/sed_fieldDataStation.rds"))
 w_SI = readRDS(here::here("data/NEONdata/water_SI.rds"))
 w_SIfield = readRDS(here::here("data/NEONdata/water_SIfield.rds"))
 
+#### stream-date areal biomass of total plants
+
+site_date_plant_biomass_m2 = plant_biomass %>%
+  group_by(siteID, collectDate) %>%
+  summarise(arealAdjDryMass_gm2 = sum(arealAdjDryMass, na.rm = TRUE),
+            arealAdjAshFreeDryMass_gm2 = sum(arealAdjAshFreeDryMass, na.rm = TRUE))
+
+#### stream-date of microbial abundance
+
+#### stream-date water quality
+# this is a list
+site_date_waq_lab = waq_lab %>%
+  group_by(siteID, collectDate) %>%
+  # unite("measure", analyte, analyteUnits, sep = "\n", remove = TRUE) %>%
+  pivot_wider(id_cols = c(siteID, collectDate),
+              names_from = c(analyte, analyteUnits),
+              names_sep = "\n", values_from = analyteConcentration,
+              values_fn = list, values_fill = NA)
+
+site_date_waq_lab_summ = waq_lab %>%
+  group_by(siteID, collectDate) %>%
+  # unite("measure", analyte, analyteUnits, sep = "\n", remove = TRUE) %>%
+  pivot_wider(id_cols = c(siteID, collectDate),
+              names_from = c(analyte, analyteUnits),
+              names_sep = "\n", values_from = analyteConcentration,
+              values_fn = mean, values_fill = NA)
+
+#### site-date epilithon chem
+
+site_date_epi_field = epi_field %>%
+  select(siteID, collectDate, namedLocation, sampleID = parentSampleID, benthicArea) %>%
+  mutate(collectDate = as.Date(collectDate)) %>%
+  left_join(epi_lab %>%
+              select(siteID, collectDate, namedLocation, sampleID, analysisType, fieldSampleVolume) %>%
+              mutate(collectDate = as.Date(collectDate))) %>%
+  mutate(arealMult = fieldSampleVolume/benthicArea) %>%
+  left_join(epi_extlab %>%
+              select(siteID, collectDate, namedLocation, sampleID, percentFilterAnalyzed, analyte, analyteConcentration, plantAlgaeLabUnits) %>%
+              # rowwise() %>%
+              mutate(sampleID = paste(sapply(strsplit(sampleID, "\\."), "[", 1:4), collapse = ".")))
+x= epi_extlab %>%
+  select(siteID, collectDate, namedLocation, sampleID, percentFilterAnalyzed, analyte, analyteConcentration, plantAlgaeLabUnits) %>%
+  # rowwise() %>%
+  mutate(sampleID = paste(sapply(strsplit(sampleID, "\\."), "[", 1:4), collapse = "."))
+
+# site_date_epi_extlab = epi_extlab %>%
+#   rename(namedLocation1 = namedLocation) %>%
+#   pivot_wider(id_cols = c(siteID, collectDate, namedLocation1),
+#               names_from = c(analyte, plantAlgaeLabUnits), names_sep = "\n",
+#               values_from = analyteConcentration,
+#               values_fn =list, values_fill = NA)
+
+site_date_epi_extlab_summ = epi_extlab %>%
+  # rename(namedLocation1 = namedLocation) %>%
+  pivot_wider(id_cols = c(siteID, collectDate, namedLocation),
+              names_from = c(analyte, plantAlgaeLabUnits), names_sep = "\n",
+              values_from = analyteConcentration,
+              values_fn =mean, values_fill = NA)
+
+site_date_epi_full = left_join(site_date_epi_field, site_date_epi_extlab_summ)
