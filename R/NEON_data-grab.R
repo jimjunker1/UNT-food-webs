@@ -8,20 +8,20 @@ source("./R/update-data-products.R")
 neonstore::neon_dir();neonstore::neon_db_dir()
 # update_data_products("resources")
 # download NEON stream data not in update_data products
-dps = c("DP1.20063.001",
-        "DP1.20066.001",
-        "DP1.20072.001",
-        "DP1.20086.001",
-        "DP1.20277.001",
-        "DP1.20093.001",
-        "DP1.20097.001",
-        "DP1.20163.001",
-        "DP1.20275.001",
-        "DP1.20191.001",
-        "DP1.20194.001",
-        "DP1.20206.001"
-        )
-neonstore::neon_download(product = dps)
+# dps = c("DP1.20063.001",
+#         "DP1.20066.001",
+#         "DP1.20072.001",
+#         "DP1.20086.001",
+#         "DP1.20277.001",
+#         "DP1.20093.001",
+#         "DP1.20097.001",
+#         "DP1.20163.001",
+#         "DP1.20275.001",
+#         "DP1.20191.001",
+#         "DP1.20194.001",
+#         "DP1.20206.001"
+#         )
+# neonstore::neon_download(product = dps)
 
 # grab data summaries for 2018-06 onwards
 
@@ -85,6 +85,7 @@ site_date_epi_field = epi_field %>%
               # rowwise() %>%
               mutate(sampleID = paste(sapply(strsplit(sampleID, "\\."), "[", 1:4), collapse = ".")))
 x= epi_extlab %>%
+  slice_head(10) %>%
   select(siteID, collectDate, namedLocation, sampleID, percentFilterAnalyzed, analyte, analyteConcentration, plantAlgaeLabUnits) %>%
   # rowwise() %>%
   mutate(sampleID = paste(sapply(strsplit(sampleID, "\\."), "[", 1:4), collapse = "."))
