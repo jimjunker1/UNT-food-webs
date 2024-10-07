@@ -4,8 +4,8 @@ library(tidyverse)
 # library(googleAuthR)
 # library(arrow)
 # library(DBI)
-source("./R/update-data-products.R")
-neonstore::neon_dir();neonstore::neon_db_dir()
+# source("./R/update-data-products.R")
+# neonstore::neon_dir();neonstore::neon_db_dir()
 # update_data_products("resources")
 # download NEON stream data not in update_data products
 # dps = c("DP1.20063.001",
@@ -27,6 +27,7 @@ neonstore::neon_dir();neonstore::neon_db_dir()
 
 streams_meta = read.csv(file = here::here("data/NEONdata/site_latlong.csv"))
 streams_vec = streams_meta$site
+date_cutoff = as.Date("2018-04-01")
 
 plant_biomass = readRDS(here::here("data/NEONdata/aquaticplant_biomass.rds"))
 microbe_abun = readRDS(here::here("data/NEONdata/benthicmicrobe_abun.rds"))
@@ -77,18 +78,31 @@ site_date_epi_field = epi_field %>%
   select(siteID, collectDate, namedLocation, sampleID = parentSampleID, benthicArea) %>%
   mutate(collectDate = as.Date(collectDate)) %>%
   left_join(epi_lab %>%
-              select(siteID, collectDate, namedLocation, sampleID, analysisType, fieldSampleVolume) %>%
+              select(siteID, collectDate, namedLocation, sampleID,  fieldSampleVolume) %>% #analysisType
               mutate(collectDate = as.Date(collectDate))) %>%
   mutate(arealMult = fieldSampleVolume/benthicArea) %>%
   left_join(epi_extlab %>%
               select(siteID, collectDate, namedLocation, sampleID, percentFilterAnalyzed, analyte, analyteConcentration, plantAlgaeLabUnits) %>%
-              # rowwise() %>%
+              rowwise() %>%
               mutate(sampleID = paste(sapply(strsplit(sampleID, "\\."), "[", 1:4), collapse = ".")))
-x= epi_extlab %>%
-  slice_head(10) %>%
-  select(siteID, collectDate, namedLocation, sampleID, percentFilterAnalyzed, analyte, analyteConcentration, plantAlgaeLabUnits) %>%
-  # rowwise() %>%
-  mutate(sampleID = paste(sapply(strsplit(sampleID, "\\."), "[", 1:4), collapse = "."))
+
+
+site_date_seston = site_date_epi_field %>%
+  filter(grepl("SESTON", sampleID)) %>%
+  select(siteID, collectDate, namedLocation, sampleID, fieldSampleVolume, percentFilterAnalyzed, analyte, analyteConcentration, plantAlgaeLabUnits) %>%
+  filter(!is.na(analyte)) %>%
+  pivot_wider(id_cols = c(siteID, collectDate),
+              names_from = c(analyte, plantAlgaeLabUnits),
+              values_from = analyteConcentration,
+              values_fn = mean,
+              values_fill = NA)
+
+
+## need to figure out why there is no volumeFiltered values ## on many of the samples
+site_date_epilithon = site_date_epi_field %>%
+  filter(grepl("EPILITHON", sampleID)) %>%
+  filter(!is.na(analyte))
+
 
 # site_date_epi_extlab = epi_extlab %>%
 #   rename(namedLocation1 = namedLocation) %>%
@@ -97,11 +111,16 @@ x= epi_extlab %>%
 #               values_from = analyteConcentration,
 #               values_fn =list, values_fill = NA)
 
-site_date_epi_extlab_summ = epi_extlab %>%
-  # rename(namedLocation1 = namedLocation) %>%
-  pivot_wider(id_cols = c(siteID, collectDate, namedLocation),
-              names_from = c(analyte, plantAlgaeLabUnits), names_sep = "\n",
-              values_from = analyteConcentration,
-              values_fn =mean, values_fill = NA)
+# site_date_epi_extlab_summ = epi_extlab %>%
+#   # rename(namedLocation1 = namedLocation) %>%
+#   pivot_wider(id_cols = c(siteID, collectDate, namedLocation),
+#               names_from = c(analyte, plantAlgaeLabUnits), names_sep = "\n",
+#               values_from = analyteConcentration,
+#               values_fn =mean, values_fill = NA)
+#### stream-date of riparian cover
 
-site_date_epi_full = left_join(site_date_epi_field, site_date_epi_extlab_summ)
+site_date_riparian = riparian_cov %>%
+  filter(riparianSubsystem == "stream") %>%
+  select(siteID, namedLocation, startDate, riparianDominantVegetation, riparianWaterDepth, wettedWidth, riparianClass, riparianSubclass, riparianDominantVegetation, bigTreeType, bigTreeCoverClass, smallTreeType, smallTreeCoverClass, woodyShrubSaplingType, woodyShrubGroundCoverClass,)
+
+
