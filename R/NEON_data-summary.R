@@ -174,6 +174,7 @@ site_metab_df = site_metab_list%>%
   mutate(year = year(date))
 
 site_metab_annual_summ = site_metab_df %>%
+  ungroup %>%
   summarise(gpp_sum = sum(GPP, na.rm = TRUE),
             gpp_sum_l = sum(GPP.lower, na.rm = TRUE),
             gpp_sum_u = sum(GPP.upper, na.rm = TRUE),
@@ -183,7 +184,8 @@ site_metab_annual_summ = site_metab_df %>%
             er_sum_u = sum(ER.upper, na.rm = TRUE),
             er_mean = mean(ER, na.rm = TRUE),
             .by = c('site','year')) %>%
-  left_join(metFull %>% summarise(ndays = n(), .by = c('site', 'year')), by = c('site','year'))
+  left_join(metFull %>% summarise(ndays = n(), .by = c('site', 'year')), by = c('site','year')) %>%
+  data.frame
 
 comment(site_metab_annual_summ) =
 "'site' represents the 4-digit site code.
@@ -203,9 +205,9 @@ for(i in 3:10){
   units(site_metab_annual_summ[,i]) <- gpp_er_units
 }
 units(site_metab_annual_summ[,11]) <- as_units("d")
-attributes(site_metab_annual_summ)
 
-saveRDS(gpp_means, file = "./data/derived_data/gpp_means.rds")
+saveRDS(site_metab_annual_summ, file = "./data/derived_data/site_metab_annual_summ.rds")
+
 
 gpp_means %>%
   dplyr::mutate(cv = sd/mean) %>% print(n = 24)
