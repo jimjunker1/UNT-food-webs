@@ -130,44 +130,16 @@ saveRDS(brm_ER_gam,here::here("data/derived-data/models/site_ER_gamm_full.rds") 
 } else{
   brm_ER_gam = readRDS(here::here("data/derived-data/models/site_ER_gamm_full.rds"))
 }
-gpp_conditionals <- NULL
-brm_GPP_gam <- setNames(brm_GPP_gam, nm = names(gpp_c_split))
-for(i in 1:length(brm_GPP_gam)){
-  # brm_gpp_fit[[i]]$data %>%
-  # distinct(tibble) %>%
-  tibble(doy = 1:365) %>%
-    dplyr::mutate(mean_doy = mean(doy),
-                  doy_c_100 = (doy - mean_doy)/100) %>%
-    tidybayes::add_epred_draws(brm_GPP_gam[[i]],
-                               re_formula = NA,
-                               ndraws = 500) %>%
-    mutate(model = names(brm_GPP_gam)[i]) %>%
-    bind_rows() -> posts_tidy
-  gpp_conditionals <- rbind(gpp_conditionals, posts_tidy)
 
-}
-for(i in seq_along(names(brm_GPP_gam))){
-  conditional_effects(brm_GPP_gam[[i]]) %>%
-    pluck(1) %>%
-    data.frame %>%
-    ggplot()+
-    geom_ribbon(aes(x = doy_c_100, ymin = lower__, ymax = upper__), fill ='lightgrey',alpha = 0.8)+
-    geom_line(aes(x = doy_c_100, y = estimate__), linewidth = 1.2)+
-    geom_point(data = lapply(conditional_effects(brm_GPP_gam[[i]]), attributes) %>%
-                 pluck('doy_c_100') %>%
-                 pluck('points'), aes(x = doy_c_100, y = resp__))+
-    scale_y_continuous(name = expression("GPP (g "*O[2]~m^-2~d^-1~")"))+
-    scale_x_continuous(name = "Day of Year")+
-    ggtitle(names(brm_GPP_gam)[[i]])+
-    theme(axis.text.x = element_blank())
-}
-plot(conditional_effects(brm_GPP_gam[['SYCA']]), points = TRUE)
-# debugonce(fill_dates)
 site_metab_list = sites %>% map(\(x) fill_dates(x)) %>% setNames(., sites)
 
-site_metab_list %>% pluck("SYCA") %>% data.frame %>%  ggplot()+
+site_metab_list %>% pluck("BLDE") %>%
+  data.frame %>%
+  ggplot()+
+  geom_ribbon(aes(x = date, ymin = GPP.lower, ymax = GPP.upper), fill = 'grey', alpha = 0.5)+
   geom_ribbon(aes(x = date, ymin = ER.lower, ymax = ER.upper), fill = 'grey', alpha = 0.5)+
-  geom_line(aes(x = date, y =ER))
+  geom_line(aes(x = date, y =ER), color = 'brown', linewidth = 1.3)+
+  geom_line(aes(x = date, y =GPP), color = 'green', linewidth = 1.3)
 
 site_metab_df = site_metab_list%>%
   bind_rows(.id = 'site') %>%
@@ -178,26 +150,26 @@ site_metab_annual_summ = site_metab_df %>%
   summarise(gpp_sum = sum(GPP, na.rm = TRUE),
             gpp_sum_l = sum(GPP.lower, na.rm = TRUE),
             gpp_sum_u = sum(GPP.upper, na.rm = TRUE),
-            gpp_mean = mean(GPP, na.rm = TRUE),
+            gpp_median = median(GPP, na.rm = TRUE),
             er_sum = sum(ER, na.rm = TRUE),
             er_sum_l = sum(ER.lower, na.rm = TRUE),
             er_sum_u = sum(ER.upper, na.rm = TRUE),
-            er_mean = mean(ER, na.rm = TRUE),
+            er_median = median(ER, na.rm = TRUE),
             .by = c('site','year')) %>%
   left_join(metFull %>% summarise(ndays = n(), .by = c('site', 'year')), by = c('site','year')) %>%
   data.frame
 
 comment(site_metab_annual_summ) =
-"'site' represents the 4-digit site code.
+  "'site' represents the 4-digit site code.
 'year' represents the 4-digit year code.
 'gpp_sum' represents daily GPP values (both measured and estimated) summed across the year.
 'gpp_sum_l' represents lower estimates of daily GPP values (both measured and estimated) summed across the year.
 'gpp_sum_u' represents upper estimates of daily GPP values (both measured and estimated) summed across the year.
-'gpp_mean' represents the mean daily GPP values (both measured and estimated) across the year.
+'gpp_median' represents the median daily GPP values (both measured and estimated) across the year.
 'er_sum' represents daily ER values (both measured and estimated) summed across the year.
 'er_sum_l' represents lower estimates of daily ER (both measured and estimated) summed across the year.
 'er_sum_u' represents upper estimates of daily ER (both measured and estimated) summed across the year.
-'er_mean' represents the mean daily ER values (both measured and estimated) across a year.
+'er_median' represents the median daily ER values (both measured and estimated) across a year.
 'ndays' the number of days GPP or ER were measured directly each year."
 
 gpp_er_units = as_units("g")*as_units("m-2")*as_units("yr-1")
@@ -206,7 +178,42 @@ for(i in 3:10){
 }
 units(site_metab_annual_summ[,11]) <- as_units("d")
 
-saveRDS(site_metab_annual_summ, file = "./data/derived_data/site_metab_annual_summ.rds")
+saveRDS(site_metab_annual_summ, file = here::here("data/derived-data/site_metab_annual_summ.rds"))
+
+# gpp_conditionals <- NULL
+# brm_GPP_gam <- setNames(brm_GPP_gam, nm = names(gpp_c_split))
+# for(i in 1:length(brm_GPP_gam)){
+#   # brm_gpp_fit[[i]]$data %>%
+#   # distinct(tibble) %>%
+#   tibble(doy = 1:365) %>%
+#     dplyr::mutate(mean_doy = mean(doy),
+#                   doy_c_100 = (doy - mean_doy)/100) %>%
+#     tidybayes::add_epred_draws(brm_GPP_gam[[i]],
+#                                re_formula = NA,
+#                                ndraws = 500) %>%
+#     mutate(model = names(brm_GPP_gam)[i]) %>%
+#     bind_rows() -> posts_tidy
+#   gpp_conditionals <- rbind(gpp_conditionals, posts_tidy)
+#
+# }
+# for(i in seq_along(names(brm_GPP_gam))){
+#   conditional_effects(brm_GPP_gam[[i]]) %>%
+#     pluck(1) %>%
+#     data.frame %>%
+#     ggplot()+
+#     geom_ribbon(aes(x = doy_c_100, ymin = lower__, ymax = upper__), fill ='lightgrey',alpha = 0.8)+
+#     geom_line(aes(x = doy_c_100, y = estimate__), linewidth = 1.2)+
+#     geom_point(data = lapply(conditional_effects(brm_GPP_gam[[i]]), attributes) %>%
+#                  pluck('doy_c_100') %>%
+#                  pluck('points'), aes(x = doy_c_100, y = resp__))+
+#     scale_y_continuous(name = expression("GPP (g "*O[2]~m^-2~d^-1~")"))+
+#     scale_x_continuous(name = "Day of Year")+
+#     ggtitle(names(brm_GPP_gam)[[i]])+
+#     theme(axis.text.x = element_blank())
+# }
+# plot(conditional_effects(brm_GPP_gam[['SYCA']]), points = TRUE)
+# # debugonce(fill_dates)
+
 
 
 gpp_means %>%
