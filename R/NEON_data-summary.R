@@ -81,13 +81,6 @@ metFull <- bayesMetFile_est %>%
          year_f = as.character(year)) %>%
   ungroup
 sites = unique(metFull$site)
-for(i in 1:length(sites)){
-  metFull %>%
-    filter(site %in% sites[i]) %>%
-    ggplot()+
-    geom_point(aes(x = date, y = GPP, color = year_f))+
-    geom_line(aes(x = date, y = GPP))
-}
 if(rerun){
 gpp_c_split = split(metFull %>% select(site, doy_c_100, GPP, year_f), f = metFull$site)
 brm_GPP_gam = brm_multiple(GPP ~ s(doy_c_100) + (1|year_f),
@@ -132,7 +125,7 @@ saveRDS(brm_ER_gam,here::here("data/derived-data/models/site_ER_gamm_full.rds") 
 }
 
 site_metab_list = sites %>% map(\(x) fill_dates(x)) %>% setNames(., sites)
-
+if(rerun){
 site_metab_list %>% pluck("BLDE") %>%
   data.frame %>%
   ggplot()+
@@ -179,6 +172,14 @@ for(i in 3:10){
 units(site_metab_annual_summ[,11]) <- as_units("d")
 
 saveRDS(site_metab_annual_summ, file = here::here("data/derived-data/site_metab_annual_summ.rds"))
+} else{site_metab_annual_summ = readRDS(file = here::here("data/derived-data/site_metab_annual_summ.rds"))}
+#summarise by Junes
+
+site_metab_JuneDf = site_metab_list%>%
+  bind_rows(.id = 'site') %>%
+  mutate(sample_yr = case_when(month(date) < 6 ~ (year(date) - 1),
+                               .default = year(date)))
+
 
 # gpp_conditionals <- NULL
 # brm_GPP_gam <- setNames(brm_GPP_gam, nm = names(gpp_c_split))
