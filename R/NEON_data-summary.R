@@ -47,7 +47,7 @@ fill_dates = function(siteCode = NULL, ...){
     left_join(gpp_conditionals, by = c('site','date')) %>%
     left_join(er_conditionals, by = c('site','date')) %>%
     mutate( discharge_mn = median(discharge, na.rm = TRUE),
-            discharge = zoo::na.approx(discharge, maxgap = 5)) %>%
+            discharge = zoo::na.spline(discharge, maxgap = 5)) %>%
     rowwise() %>%
     mutate(GPP = coalesce(GPP, GPP_est),
            GPP.lower = coalesce(GPP.lower, GPP_est_l),
@@ -148,6 +148,7 @@ site_metab_annual_summ = site_metab_df %>%
             er_sum_l = sum(ER.lower, na.rm = TRUE),
             er_sum_u = sum(ER.upper, na.rm = TRUE),
             er_median = median(ER, na.rm = TRUE),
+            discharge_mn = mean(discharge, na.rm = TRUE),
             .by = c('site','year')) %>%
   left_join(metFull %>% summarise(ndays = n(), .by = c('site', 'year')), by = c('site','year')) %>%
   data.frame
@@ -163,13 +164,15 @@ comment(site_metab_annual_summ) =
 'er_sum_l' represents lower estimates of daily ER (both measured and estimated) summed across the year.
 'er_sum_u' represents upper estimates of daily ER (both measured and estimated) summed across the year.
 'er_median' represents the median daily ER values (both measured and estimated) across a year.
-'ndays' the number of days GPP or ER were measured directly each year."
+'ndays' the number of days GPP or ER were measured directly each year.
+'discharge' is the mean discharge measured over the year. "
 
 gpp_er_units = as_units("g")*as_units("m-2")*as_units("yr-1")
 for(i in 3:10){
   units(site_metab_annual_summ[,i]) <- gpp_er_units
 }
 units(site_metab_annual_summ[,11]) <- as_units("d")
+# units(site_metab_annual_summ[,12])
 
 saveRDS(site_metab_annual_summ, file = here::here("data/derived-data/site_metab_annual_summ.rds"))
 } else{site_metab_annual_summ = readRDS(file = here::here("data/derived-data/site_metab_annual_summ.rds"))}
@@ -178,7 +181,26 @@ saveRDS(site_metab_annual_summ, file = here::here("data/derived-data/site_metab_
 site_metab_JuneDf = site_metab_list%>%
   bind_rows(.id = 'site') %>%
   mutate(sample_yr = case_when(month(date) < 6 ~ (year(date) - 1),
-                               .default = year(date)))
+                               .default = year(date))) %>%
+  mutate(sample_yr = str_c(sample_yr,"-06-01")) %>%
+  ungroup %>%
+  summarise(across(c(GPP, GPP.lower, GPP.upper, ER, ER.lower, ER.upper), \(x) sum(x, na.rm = TRUE), .names = "{.col}_sum"),
+            across(discharge, \(x) mean(x, na.rm = TRUE), .names = "{.col}_mean"),
+            ndays = n(), .by = c('site','sample_yr'))
+
+comment(site_metab_JuneDf) =
+  "'site' represents the 4-digit site code.
+'sample_yr' represents the starting month of the sample year.
+'GPP_sum' represents daily GPP values (both measured and estimated) summed across the year.
+'GPP.lower_sum' represents lower estimates of daily GPP values (both measured and estimated) summed across the year.
+'GPP.upper_sum' represents upper estimates of daily GPP values (both measured and estimated) summed across the year.
+'ER_sum' represents daily ER values (both measured and estimated) summed across the year.
+'ER.lower_sum' represents lower estimates of daily ER (both measured and estimated) summed across the year.
+'ER.upper_sum' represents upper estimates of daily ER (both measured and estimated) summed across the year.
+'discharge' is the mean discharge measured over the year.
+'ndays' the number of days GPP or ER were measured directly each year."
+
+saveRDS(site_metab_JuneDf, file = here::here("data/derived-data/site_metab_June_summ.rds"))
 
 
 # gpp_conditionals <- NULL
@@ -216,15 +238,75 @@ site_metab_JuneDf = site_metab_list%>%
 # # debugonce(fill_dates)
 
 
-
-gpp_means %>%
-  dplyr::mutate(cv = sd/mean) %>% print(n = 24)
-
-
 # data summary
 site_date_files = list.files(here::here("data/derived-data/"), pattern = "site_date_.*.rds", full.names = TRUE)
 site_date_names = lapply(site_date_files, function(x) gsub("(site_date_.*).rds$","\\1",sapply(strsplit(x,"/"),"[",10)))
 site_date_list = site_date_files %>% purrr::map(readRDS) %>% setNames(site_date_names)
 
+site_date_annual_summaries = site_date_list %>%
+  rlist::list.subset(!grepl("riparian", names(.))) %>%
+  map(\(x) x %>% ungroup %>%
+        rename(site = 'siteID', date = 'collectDate') %>%
+        mutate(year = year(as.Date(date))) %>%
+        select(-date) %>%
+        summarise(across(everything(), \(x) mean(x, na.rm = TRUE)),
+                  n = n(),.by = c('site','year')))
+
+saveRDS(site_date_annual_summaries, here::here("data/derived-data/site_date_annual_summaries.rds"))
 
 
+site_date_june_summaries =  site_date_list %>%
+  rlist::list.subset(!grepl("riparian", names(.))) %>%
+  map(\(x) x %>% ungroup %>%
+        rename(site = 'siteID', date = 'collectDate') %>%
+        mutate(sample_yr = case_when(month(as.Date(date)) < 6 ~ (year(as.Date(date)-1)),
+                                     .default = year(as.Date(date)))) %>%
+        mutate(sample_yr = str_c(sample_yr,"-06-01")) %>%
+        select(-date) %>%
+        summarise(across(everything(), \(x) mean(x, na.rm = TRUE)),
+                  n = n(),.by = c('site','sample_yr')))
+saveRDS(site_date_june_summaries, here::here("data/derived-data/site_date_june_summaries.rds"))
+
+site_date_riparian_num_summaries = site_date_list %>%
+  pluck("site_date_riparian") %>%
+  rename(site = 'siteID',date = 'startDate') %>%
+  mutate(date = as.Date(date),
+         year = year(date)) %>%
+  summarise(across(where(is.numeric), \(x) mean(x, na.rm = TRUE)),.by = c('site','year'))
+
+saveRDS(site_date_riparian_num_summaries, here::here("data/derived-data/site_date_riparian_num_summary.rds"))
+site_date_riparian_fac_summaries = site_date_list %>%
+  pluck("site_date_riparian") %>%
+  rename(site = 'siteID',date = 'startDate') %>%
+  select(-namedLocation, -where(is.numeric),site, date) %>%
+  mutate(date = as.Date(date)) %>%
+  group_by(site, date) %>%
+  pivot_longer(cols = -c(site,date),
+               names_to = 'variable',
+               values_to = 'value') %>%
+  mutate(count = 1) %>%
+  ungroup %>%
+  pivot_wider(names_from = c(variable, value),
+              values_from = count,
+              values_fill = 0,
+              values_fn = sum) %>%
+  pivot_longer(cols = -c(site,date),
+               names_to = 'variable',
+               values_to = 'count') %>%
+  mutate(year = year(date)) %>%
+  summarise(count = sum(count), .by = c(site,year,variable)) %>%
+  separate(col = variable, c("variable","value"), convert = TRUE, sep = "_", remove = FALSE)
+
+saveRDS(site_date_riparian_fac_summaries, here::here("data/derived-data/site_date_riparian_fac_summary.rds"))
+
+
+site_date_riparian_comp_summaries = site_date_list %>%
+  pluck("site_date_riparian_comp") %>%
+  rename(site = 'siteID',date = 'startDate') %>%
+  mutate(date = as.Date(date),
+         year = year(date)) %>%
+  summarise(`canopyCover%_mean` = mean(canopyCoverPercent, na.rm = TRUE),
+            `canopyCover%_sd` = sd(canopyCoverPercent, na.rm = TRUE), .by = c(site, year))
+
+saveRDS(site_date_riparian_comp_summaries,
+        here::here("data/derived-data/site_date_riparian_cover_summary.rds"))

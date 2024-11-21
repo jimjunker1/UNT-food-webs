@@ -99,7 +99,15 @@ site_date_epi_chlorophyll = epi_field %>%
                                       .default = analyteArealMass),
          plantAlgaeLabUnits = case_when(grepl("micrograms.*", plantAlgaeLabUnits) ~ "milligrams_m2",
                                         .default = plantAlgaeLabUnits)) %>%
-  select(siteID, collectDate, namedLocation, analyte, analyteArealMass, plantAlgaeLabUnits)
+  select(siteID, collectDate, namedLocation, analyte, analyteArealMass, plantAlgaeLabUnits) %>%
+  filter(!is.na(analyte),
+         analyte != 'total chlorophyll a') %>%
+  pivot_wider(id_cols = c(siteID, collectDate, namedLocation),
+              names_from = c(analyte, plantAlgaeLabUnits),
+              names_sep = "\n",
+              values_from = analyteArealMass,
+              values_fn = mean, values_fill = NA) %>%
+  select(-namedLocation)
 
 saveRDS(site_date_epi_chlorophyll, here::here("data/derived-data/site_date_epi_chlorophyll.rds"))
 
@@ -137,7 +145,7 @@ site_date_epi_chem = epi_field %>%
          `nitrogen\nmol_m2` = `nitrogen\ngrams_m2`/14.007,
          `phosphorus\nmol_m2` = `phosphorus\ngrams_m2`/30.974,
          `sulfur\nmol_m2` = `sulfur\ngrams_m2`/32.06) %>%
-  mutate(across(everything(), ~ifelse(.x == 0, NA_real_, .x)))
+  mutate(across(-collectDate, ~ifelse(.x == 0, NA_real_, .x)))
 
 saveRDS(site_date_epi_chem, here::here("data/derived-data/site_date_epi_chem.rds"))
 
